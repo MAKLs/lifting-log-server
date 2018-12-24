@@ -1,27 +1,29 @@
 """
 RESTful API for interacting with application's database of physical data
 """
+import functools
 from flask import Blueprint, jsonify, request, abort
 from app.models import db
 from .models import Workout, Exercise
 
 api = Blueprint('api', __name__)
 
-def get_or_abort(code=404):
-    def get_decorator(get_func):
-        def get_wrapper(*args, **kwargs):
-            resp = get_func(*args, **kwargs)
+def execute_or_abort(code=404):
+    def api_decorator(api_func):
+        @functools.wraps(api_func)
+        def api_wrapper(*args, **kwargs):
+            resp = api_func(*args, **kwargs)
             if int(resp.headers['Content-Length']) > 3:
                 return resp
             else:
                 abort(code)
-        return get_wrapper
-    return get_decorator
+        return api_wrapper
+    return api_decorator
 
 
 @api.route('/workouts', methods=['GET'])
 @api.route('/workouts/<int:wid>', methods=['GET'])
-@get_or_abort(404)
+@execute_or_abort(404)
 def get_workout(wid=None):
     if wid is not None:
         results = Workout.query.filter_by(id=wid).first()
@@ -43,3 +45,15 @@ def add_workout():
         db.session.add(e)
     db.session.commit()
     return jsonify(wo.serialize())
+
+
+@api.route('/workouts/<int:wid>', methods=['DELETE'])
+@execute_or_abort(404)
+def remove_workout(wid):
+    resp = {}
+    result = Workout.query.filter_by(id=wid).first()
+    if result:
+        db.session.delete(result)
+        db.session.commit()
+        resp['workout'] = result.serialize()
+    return jsonify(resp)
